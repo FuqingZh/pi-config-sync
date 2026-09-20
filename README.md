@@ -80,9 +80,12 @@ Nothing outside the allowlist ever syncs — new files are ignored by default. S
 | `auth*` (`auth.json`) | API keys and OAuth tokens |
 | `*token*`, `*secret*`, `*credential*`, `*.env*`, `*.local.json` | Anything named like a secret |
 | `sessions/`, `state/`, `.git-sync/` | Local history and machine state |
+| `logs/` at any depth | Runtime logs, including permission audit/debug logs; retained locally |
 | `npm/`, `git/`, `bin/`, `node_modules` | Installed packages — pi reinstalls them from `settings.json` |
 
-The policy is enforced four ways — a managed allowlist `.gitignore`, `.git/info/exclude`, a post-stage hard guard that resets and aborts any commit staging a denied path, and a tracked-file scan warning — so it holds even against `git add -f`. It never force-pushes.
+The policy is enforced four ways — a managed allowlist `.gitignore`, `.git/info/exclude`, a post-stage hard guard that refuses additions or changes to denied paths, and a push guard that checks the committed tree and outgoing history — so force-staging a denied path does not bypass the commit guard. Deletions remain allowed for cleanup. It never force-pushes.
+
+Ignore rules do not untrack existing files. Use `git rm --cached -- <path>` to stop tracking a log while retaining the local file. A later deletion does not remove that log from earlier commits: the push guard also checks commits not reachable from locally known `origin` remote-tracking refs, including on initial and shutdown pushes. Unpushed history containing denied paths must be cleaned before retrying. The package does not rewrite history or revoke exposed credentials. These are path-based checks, not a content secret scanner.
 
 Git commands operate only on the agent directory's own repository — `GIT_CEILING_DIRECTORIES` stops git from ever discovering a parent repository (such as dotfiles in `$HOME`), and sync refuses to run until `~/.pi/agent/.git` itself exists. GitHub CLI calls are account-level (`gh api user`, `gh repo view/create`) and never modify repository contents. Use a private repository. When `gh` can identify a public GitHub remote, the package warns; it does not block because no credentials are synced.
 
