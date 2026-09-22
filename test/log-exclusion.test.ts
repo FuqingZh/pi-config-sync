@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
-import { commitLocalChanges, ensureIgnoreRules, isDenied, runInit, runLink, runSync, type GhClient } from "../extensions/git-sync.ts";
+import { commitLocalChanges, ensureIgnoreRules, isDenied, runInit, runLink, runSync, syncGaps, type GhClient } from "../extensions/git-sync.ts";
 
 const exec = promisify(execFile);
 const logFile = "extensions/pi-permission-system/logs/pi-permission-system-permission-review.jsonl";
@@ -66,6 +66,16 @@ test("init and two-machine sync retain local logs and transfer configuration", a
 	await runSync(undefined, { auto: false, push: true }, { dir: second, gh });
 	assert.equal(await fs.readFile(path.join(second, configFile), "utf8"), await fs.readFile(path.join(dir, configFile), "utf8"));
 	assert.equal(await fs.readFile(path.join(second, logFile), "utf8"), "second audit\n");
+});
+
+test("excluded log directories are not reported as sync gaps", async t => {
+	const { dir, remote } = await fixture(t);
+	await write(dir, logFile, "audit\n");
+	await write(dir, "extensions/pi-permission-system/api-token.json", "{}\n");
+	await runInit(remote, undefined, { dir, gh });
+	const { denied } = await syncGaps(dir);
+	assert.ok(!denied.some(file => file.split("/").includes("logs")), denied.join(", "));
+	assert.ok(denied.includes("extensions/pi-permission-system/api-token.json"), denied.join(", "));
 });
 
 test("managed ignore rules remain effective after regeneration and extraPaths", async t => {
